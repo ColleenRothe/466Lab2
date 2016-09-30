@@ -75,8 +75,8 @@ class Packet_2_1:
         #extract the fields
         seq_num = int(byte_S[Packet_2_1.length_S_length : Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length])
         # change these types maybe
-        ACK = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length]
-        NAK = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length]
+        ACK = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length])
+        NAK = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length])
         msg_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length+Packet_2_1.checksum_length :]
         return self(seq_num, ACK, NAK, msg_S)
         
@@ -168,13 +168,16 @@ class RDT:
     
     def rdt_2_1_send(self, msg_S):
         #seq nums are 0,1,0,1...shouldn't have same number 2x in a row
+        # are we sending a ACK or NAK
+        ACK = 0
+        NAK = 0
         if self.seq_num == 1 :
             print("ONE")
-            p = Packet_2_1(0, msg_S)
+            p = Packet_2_1(0, ACK, NAK, msg_S)
             self.seq_num = 0
         elif self.seq_num == 0:
             print("ZERO")
-            p = Packet_2_1(1, msg_S)
+            p = Packet_2_1(1, ACK, NAK, msg_S)
             self.seq_num = 1
         print("RDT 2.1")
         print(p.seq_num)
