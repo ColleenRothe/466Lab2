@@ -112,10 +112,12 @@ class Packet_2_1:
         return checksum_S != computed_checksum_S
 
     def isACK(byte_S):
-        pass
+        ACK_S = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length])
+        return ACK_S == 1
 
     def isNAK(byte_S):
-        pass
+        NAK_S = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length])
+        return NAK_S == 1
     
 
 class RDT:
