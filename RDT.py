@@ -74,6 +74,7 @@ class Packet_2_1:
             raise RuntimeError('Cannot initialize Packet: byte_S is corrupt')
         #extract the fields
         seq_num = int(byte_S[Packet_2_1.length_S_length : Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length])
+        # change these types maybe
         ACK = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length]
         NAK = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length]
         msg_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length+Packet_2_1.checksum_length :]
@@ -85,13 +86,13 @@ class Packet_2_1:
         seq_num_S = str(self.seq_num).zfill(self.seq_num_S_length)
         #convert length to a byte field of length_S_length bytes
         length_S = str(self.length_S_length + len(seq_num_S) + self.ACK_length + self.NAK_length + self.checksum_length + len(self.msg_S)).zfill(self.length_S_length)
-        ACK = str(self.ACK).zfill(self.ACK_length)
-        NAK = str(self.NAK).zfill(self.NAK_length)
+        ACK_S = str(self.ACK).zfill(self.ACK_length)
+        NAK_S = str(self.NAK).zfill(self.NAK_length)
         #compute the checksum
-        checksum = hashlib.md5((length_S+seq_num_S+ACK+NAK+self.msg_S).encode('utf-8'))
+        checksum = hashlib.md5((length_S+seq_num_S+ACK_S+NAK_S+self.msg_S).encode('utf-8'))
         checksum_S = checksum.hexdigest()
         #compile into a string
-        return length_S + seq_num_S + ACK + NAK + checksum_S + self.msg_S
+        return length_S + seq_num_S + ACK_S + NAK_S + checksum_S + self.msg_S
    
     
     @staticmethod
@@ -99,15 +100,23 @@ class Packet_2_1:
         #extract the fields
         length_S = byte_S[0:Packet_2_1.length_S_length]
         seq_num_S = byte_S[Packet_2_1.length_S_length : Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length]
-        checksum_S = byte_S[Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length : Packet_2_1.seq_num_S_length+Packet_2_1.length_S_length+Packet_2_1.checksum_length]
-        msg_S = byte_S[Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.checksum_length :]
+        ACK_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length]
+        NAK_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length]
+        checksum_S = byte_S[Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length : Packet_2_1.seq_num_S_length+Packet_2_1.length_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length+Packet_2_1.checksum_length]
+        msg_S = byte_S[Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length+Packet_2_1.checksum_length :]
         
         #compute the checksum locally
-        checksum = hashlib.md5(str(length_S+seq_num_S+msg_S).encode('utf-8'))
+        checksum = hashlib.md5(str(length_S+seq_num_S+ACK_S+NAK_S+msg_S).encode('utf-8'))
         computed_checksum_S = checksum.hexdigest()
         #and check if the same
         return checksum_S != computed_checksum_S
-        
+
+    def isACK(byte_S):
+        pass
+
+    def isNAK(byte_S):
+        pass
+    
 
 class RDT:
     ## latest sequence number used in a packet
