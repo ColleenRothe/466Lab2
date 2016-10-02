@@ -42,7 +42,8 @@ class Packet:
         #extract the fields
         length_S = byte_S[0:Packet.length_S_length]
         seq_num_S = byte_S[Packet.length_S_length : Packet.seq_num_S_length+Packet.seq_num_S_length]
-        checksum_S = byte_S[Packet.seq_num_S_length+Packet.seq_num_S_length : Packet.seq_num_S_length+Packet.length_S_length+Packet.checksum_length]
+        checksum_S = byte_S[Packet.seq_num_S_length+Packet.seq_num_S_length :
+                            Packet.seq_num_S_length+Packet.length_S_length+Packet.checksum_length]
         msg_S = byte_S[Packet.seq_num_S_length+Packet.seq_num_S_length+Packet.checksum_length :]
         
         #compute the checksum locally
@@ -50,14 +51,13 @@ class Packet:
         computed_checksum_S = checksum.hexdigest()
         #and check if the same
         return checksum_S != computed_checksum_S
-        
-
+    
 class Packet_2_1:
     ## the number of bytes used to store packet length
     seq_num_S_length = 10
     length_S_length = 10
-    ACK_length = 1
-    NAK_length = 1
+    ACK_length = 2
+    NAK_length = 2
     ## length of md5 checksum in hex
     checksum_length = 32 
         
@@ -71,12 +71,15 @@ class Packet_2_1:
     # need to change return for ACK and NAK?
     def from_byte_S(self, byte_S): # added NAK and ACK
         if Packet_2_1.corrupt(byte_S):
-            raise RuntimeError('Cannot initialize Packet: byte_S is corrupt')
+            RDT.rdt_2_1_send(False)
+            # raise RuntimeError('Cannot initialize Packet: byte_S is corrupt')
         #extract the fields
-        seq_num = int(byte_S[Packet_2_1.length_S_length : Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length])
-        # change these types maybe
-        ACK = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length])
-        NAK = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length])
+        seq_num = int(byte_S[Packet_2_1.length_S_length :
+                             Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length])
+        ACK = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:
+                         Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length])
+        NAK = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:
+                         Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length])
         msg_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length+Packet_2_1.checksum_length :]
         return self(seq_num, ACK, NAK, msg_S)
         
@@ -99,10 +102,14 @@ class Packet_2_1:
     def corrupt(byte_S):
         #extract the fields
         length_S = byte_S[0:Packet_2_1.length_S_length]
-        seq_num_S = byte_S[Packet_2_1.length_S_length : Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length]
-        ACK_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length]
-        NAK_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length]
-        checksum_S = byte_S[Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length : Packet_2_1.seq_num_S_length+Packet_2_1.length_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length+Packet_2_1.checksum_length]
+        seq_num_S = byte_S[Packet_2_1.length_S_length :
+                           Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length]
+        ACK_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:
+                       Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length]
+        NAK_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:
+                       Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length]
+        checksum_S = byte_S[Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length :
+                            Packet_2_1.seq_num_S_length+Packet_2_1.length_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length+Packet_2_1.checksum_length]
         msg_S = byte_S[Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length+Packet_2_1.checksum_length :]
         
         #compute the checksum locally
@@ -112,13 +119,15 @@ class Packet_2_1:
         return checksum_S != computed_checksum_S
 
     def isACK(byte_S):
-        ACK_S = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length])
+        ACK_S = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:
+                           Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length])
         return ACK_S == 1
 
     def isNAK(byte_S):
-        NAK_S = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length])
+        NAK_S = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:
+                           Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length])
         return NAK_S == 1
-    
+        
 
 class RDT:
     ## latest sequence number used in a packet
@@ -134,23 +143,13 @@ class RDT:
         
     def rdt_1_0_send(self, msg_S):
         p = Packet(self.seq_num, msg_S)
-        print("P IS")
-        print(p)
-        print("SEQUENCE NUM IS")
-        print(self.seq_num)
         self.seq_num += 1
         self.network.udt_send(p.get_byte_S())
-          
         
     def rdt_1_0_receive(self):
-        #print("RECEIVING")
         ret_S = None
         byte_S = self.network.udt_receive()
-        #print("BYTE_S IS")
-        #print(byte_S)
         self.byte_buffer += byte_S
-        #print("BYTE BUFFER IS")
-        #print(self.byte_buffer)
         #keep extracting packets - if reordered, could get more than one
         while True:
             #check if we have received enough bytes
@@ -173,16 +172,18 @@ class RDT:
         # are we sending a ACK or NAK
         ACK = 0
         NAK = 0
+        if msg_S is True:
+            ACK = 1
+            msg_S = ""
+        elif msg_S is False:
+            NAK = 1
+            msg_S = ""
         if self.seq_num == 1 :
-            print("ONE")
             p = Packet_2_1(0, ACK, NAK, msg_S)
             self.seq_num = 0
         elif self.seq_num == 0:
-            print("ZERO")
             p = Packet_2_1(1, ACK, NAK, msg_S)
             self.seq_num = 1
-        print("RDT 2.1")
-        print(p.seq_num)
         self.network.udt_send(p.get_byte_S())
   
     def rdt_2_1_receive(self):
@@ -199,13 +200,19 @@ class RDT:
                 return ret_S #not enough bytes to read the whole packet
             #create packet from buffer content and add to return string
             p = Packet_2_1.from_byte_S(self.byte_buffer[0:length])
-            print("SEQUENCE NUM IS")
-            print(p.seq_num)
-            ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
-            #remove the packet bytes from the buffer
+            if p.ACK == 1:
+                # what do
+                ret_S = ""
+                #return ret_S
+            elif p.NAK == 1:
+                ret_S = None
+                #return ret_S
+            else: # is message
+                self.rdt_2_1_send(True)
+                ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
+                #remove the packet bytes from the buffer
             self.byte_buffer = self.byte_buffer[length:]
-            #if this was the last packet, will return on the next iteration
-            
+                #if this was the last packet, will return on the next iteration
     
     def rdt_3_0_send(self, msg_S):
         pass
@@ -223,16 +230,16 @@ if __name__ == '__main__':
     
     rdt = RDT(args.role, args.server, args.port)
     if args.role == 'client':
-        rdt.rdt_1_0_send('MSG_FROM_CLIENT')
+        rdt.rdt_2_1_send('MSG_FROM_CLIENT')
         sleep(2)
-        print(rdt.rdt_1_0_receive())
+        print(rdt.rdt_2_1_receive())
         rdt.disconnect()
         
         
     else:
         sleep(1)
-        print(rdt.rdt_1_0_receive())
-        rdt.rdt_1_0_send('MSG_FROM_SERVER')
+        print(rdt.rdt_2_1_receive())
+        rdt.rdt_2_1_send('MSG_FROM_SERVER')
         rdt.disconnect()
         
 
