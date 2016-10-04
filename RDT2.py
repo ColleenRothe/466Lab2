@@ -17,8 +17,9 @@ class Packet:
         
     @classmethod
     def from_byte_S(self, byte_S):
-        if Packet.corrupt(byte_S):
-            raise RuntimeError('Cannot initialize Packet: byte_S is corrupt')
+##        if Packet.corrupt(byte_S):
+##            raise RuntimeError('Cannot initialize Packet: byte_S is corrupt')
+##            #print("corrupt")
         #extract the fields
         seq_num = int(byte_S[Packet.length_S_length : Packet.length_S_length+Packet.seq_num_S_length])
         msg_S = byte_S[Packet.length_S_length+Packet.seq_num_S_length+Packet.checksum_length :]
@@ -67,12 +68,14 @@ class Packet_2_1:
         
     @classmethod
     def from_byte_S(self, byte_S): 
-        if Packet_2_1.corrupt(byte_S):
-             raise RuntimeError('Cannot initialize Packet: byte_S is corrupt')
+##        if Packet_2_1.corrupt(byte_S):
+##            raise RuntimeError('Cannot initialize Packet: byte_S is corrupt')
+##            #print("corrupt")
+##            
         #extract the fields (only 1 for the ack/nack...)
         #same as idea for seq num in 1.0
         flag = int(byte_S[Packet_2_1.length_S_length :
-                           Packet_2_1.seq_num_S_length+Packet_2_1.seq_num_S_length])
+                           Packet_2_1.flag_length+Packet_2_1.length_S_length])
         return self(flag)
         
     def get_byte_S(self):
@@ -90,8 +93,8 @@ class Packet_2_1:
     def corrupt(byte_S):
         #extract the fields
         length_S = byte_S[0:Packet_2_1.length_S_length]
-        flag_S = byte_S[Packet_2_1.length_S_length : Packet_2_1.length_S_length+Packet_2_1.flag_length]
-        checksum_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.flag_length+Packet_2_1.checksum_length: ]
+        flag_S = byte_S[Packet_2_1.length_S_length : Packet_2_1.flag_length+Packet_2_1.flag_length]
+        checksum_S = byte_S[Packet_2_1.length_S_length+Packet_2_1.flag_length: ]
         
         #compute the checksum locally
         checksum = hashlib.md5(str(length_S+flag_S).encode('utf-8'))
@@ -99,15 +102,17 @@ class Packet_2_1:
         #and check if the same
         return checksum_S != computed_checksum_S
 
-    def isACK(flag):
-        if flag == 0:
+    #ack = 1
+    def isACK(self,flag):
+        if flag == 1:
             return True
         else:
             return False
  
 
-    def isNAK(flag):
-        if flag == 0:
+    #nak = 0
+    def isNAK(self,flag):
+        if flag == 1:
             return False
         else:
             return True
@@ -178,8 +183,8 @@ class RDT:
             dont_care = True
             while dont_care:
                 byte_S = self.network.udt_receive()
-                if(len(byte_S) == 52):
-                    packet = Packet_2_1.from_byte_S(byte_S)
+                if(len(byte_S) == 52): #don't want the empty stuff 
+                    packet = Packet_2_1.from_byte_S(byte_S) #2.1?
                     #(1)
                     if packet.corrupt(byte_S) or packet.isNAK(packet.flag):
                         self.network.udt_send(p.get_byte_S())
@@ -187,7 +192,6 @@ class RDT:
                         self.seq_num = 0 #(start w/ a 1)
                         self.send = 2 #go to the next state
                         dont_care = False
-                        break
 
         #get into state 2
         elif self.send == 2:
@@ -196,7 +200,7 @@ class RDT:
             while dont_care:
                 byte_S = self.network.udt_receive()
                 if(len(byte_S) == 52):
-                    packet = Packet_2_1.from_byte_S(byte_S)
+                    packet = Packet_2_1.from_byte_S(byte_S) #2.1?
                     #(1)
                     if packet.corrupt(byte_S) or packet.isNAK(packet.flag):
                         self.network.udt_send(p.get_byte_S())
@@ -204,7 +208,7 @@ class RDT:
                         self.seq_num = 1 #(start w/ a 1)
                         self.send = 1 #go back to the other state
                         dont_care = False
-                        break
+                        
 
      #RECEIVING: 2 States
         #State 1:
@@ -222,22 +226,30 @@ class RDT:
     def rdt_2_1_receive(self):
         #from 1.0
         ret_S = None
-        byte_S = self.network.udt_receive()
-        self.byte_buffer += byte_S
-
+        byte_S = None
         while True:
+            #problem...sometimes receiving nothing?
+            while byte_S is None:
+                byte_S = self.network.udt_receive()
+                if byte_S:
+                    self.byte_buffer += byte_S
+                    break
+                else:
+                    continue
             #check if we have received enough bytes
-            if(len(self.byte_buffer) < Packet_2_1.length_S_length):
+            if(len(self.byte_buffer) < Packet.length_S_length):
+                sleep(0.1) #socket timeout in Network.py
                 return ret_S #not enough bytes to read packet length
             #extract length of packet
-            length = int(self.byte_buffer[:Packet_2_1.length_S_length])
+            length = int(self.byte_buffer[:Packet.length_S_length])
             if len(self.byte_buffer) < length:
+                sleep(0.1) #socket timeout in Network.py
                 return ret_S #not enough bytes to read the whole packet
             #create packet from buffer content and add to return string
             p = Packet.from_byte_S(self.byte_buffer[0:length])
 
             if self.receive == 1:
-                if not p.corrupt and p.seq_num == 1:
+                if not p.corrupt(p.get_byte_S()) and p.seq_num == 1:
                     #do stuff from 1.0
                     ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
                     #remove the packet bytes from the buffer
@@ -247,11 +259,11 @@ class RDT:
                     self.network.udt_send(packet.get_byte_S())
                     #get to the next state
                     self.receive = 2
-                elif p.corrupt:
+                elif p.corrupt(p.get_byte_S()):
                     #send a nak
                     packet = Packet_2_1(0)
                     self.network.udt_send(packet.get_byte_S())
-                elif not p.corrupt and p.seq_num == 0:
+                elif not p.corrupt(p.get_byte_S()) and p.seq_num == 0:
                     #send ack
                     packet = Packet_2_1(1)
                     self.network.udt_send(packet.get_byte_S())
@@ -259,7 +271,7 @@ class RDT:
 
             #same just switch seq_num stuff
             elif self.receive == 2:
-                if not p.corrupt and p.seq_num == 0:
+                if not p.corrupt(p.get_byte_S()) and p.seq_num == 0:
                     #do stuff from 1.0
                     ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
                     #remove the packet bytes from the buffer
@@ -269,11 +281,11 @@ class RDT:
                     self.network.udt_send(packet.get_byte_S())
                     #get to the next state
                     self.receive = 1
-                elif p.corrupt:
+                elif p.corrupt(p.get_byte_S()):
                     #send a nak
                     packet = Packet_2_1(0)
                     self.network.udt_send(packet.get_byte_S())
-                elif not p.corrupt and p.seq_num == 1:
+                elif not p.corrupt(p.get_byte_S()) and p.seq_num == 1:
                     #send ack
                     packet = Packet_2_1(1)
                     self.network.udt_send(packet.get_byte_S())
