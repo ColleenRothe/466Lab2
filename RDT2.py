@@ -18,7 +18,7 @@ class Packet:
     @classmethod
     def from_byte_S(self, byte_S):
         if Packet.corrupt(byte_S):
-            RDT.corrupt()
+            return None
             #raise RuntimeError('Cannot initialize Packet: byte_S is corrupt')
         #extract the fields
         seq_num = int(byte_S[Packet.length_S_length : Packet.length_S_length+Packet.seq_num_S_length])
@@ -69,9 +69,9 @@ class Packet_2_1:
     @classmethod
     def from_byte_S(self, byte_S): 
         if Packet_2_1.corrupt(byte_S):
-            RDT.corrupt()
             #raise RuntimeError('Cannot initialize Packet: byte_S is corrupt')
             #print("corrupt")
+            return None
             
         #extract the fields (only 1 for the ack/nack...)
         #same as idea for seq num in 1.0
@@ -173,14 +173,13 @@ class RDT:
     #State 2:
             #same thing...but for the other sequence num.
 
-    def corrupt():
-        print("CORRUPT")
-        #if self.send ==1 and corrupt and ....
-        #call if all from here?
+    
 
     def rdt_2_1_send(self, msg_S):
         #same as from 1.0 send. need to get data in the if
         p = Packet(self.seq_num, msg_S)
+        if p is None:
+            print("BAD")
         self.network.udt_send(p.get_byte_S())
 
         #get into state 1
@@ -253,6 +252,8 @@ class RDT:
                 return ret_S #not enough bytes to read the whole packet
             #create packet from buffer content and add to return string
             p = Packet.from_byte_S(self.byte_buffer[0:length])
+            if p is None:
+                print("NONE IN RECEIVE")
 
             if self.receive == 1:
                 if not p.corrupt(p.get_byte_S()) and p.seq_num == 1:
