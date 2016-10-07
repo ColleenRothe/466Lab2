@@ -127,6 +127,8 @@ class RDT:
     byte_buffer = ''
     send = 1
     receive = 1
+    last_msg = ''
+    last_rec = ''
     
     
 
@@ -178,9 +180,8 @@ class RDT:
     def rdt_2_1_send(self, msg_S):
         #same as from 1.0 send. need to get data in the if
         p = Packet(self.seq_num, msg_S)
-        if p is None:
-            print("BAD")
         self.network.udt_send(p.get_byte_S())
+        self.last_msg = msg_S
 
         #get into state 1
         if self.send == 1:
@@ -189,22 +190,26 @@ class RDT:
             while dont_care:
                 byte_S = self.network.udt_receive()
                 if(len(byte_S) == 52): #don't want the empty stuff
-                    print("ANYTHING")
 
                     packet = Packet_2_1.from_byte_S(byte_S) #2.1?
                     #(1)
-                    if packet is None or packet.isNAK(packet.flag):
-                        if packet is not None and packet.isNAK(packet.flag):
-                            print("NAK1")
-                        else:
-                            print("corrupt1")
+                    #if packet is None or packet.isNAK(packet.flag):
+                    if packet is not None and packet.isNAK(packet.flag):
+                        print("GOT A NAK1")
+                        self.network.udt_send(p.get_byte_S())
+
+                    elif packet is None: #packet corrupt
+                        print("GOT A corrupt1")
                         self.network.udt_send(p.get_byte_S())
                         byte_S = None
                     elif not packet.corrupt(byte_S) and packet.isACK(packet.flag):
-                        print("ACK1")
+                        print("GOT ACK1")
                         self.seq_num = 0 #(start w/ a 1)
-                        #self.send = 2 #go to the next state
+                        self.send = 2 #go to the next state
                         dont_care = False
+                    else:
+                        print("ELSE 1")
+                        print(len(byte_S))
 
         #get into state 2
         elif self.send == 2:
@@ -212,23 +217,27 @@ class RDT:
             dont_care = True
             while dont_care:
                 byte_S = self.network.udt_receive()
-                if(len(byte_S) == 52):
-                    print("ANYTHING")
+                if(len(byte_S) == 52): #==
 
                     packet = Packet_2_1.from_byte_S(byte_S) #2.1?
                     #(1)
-                    if packet is None or packet.isNAK(packet.flag):
-                        if packet is not None and packet.isNAK(packet.flag):
-                            print("NAK2")
-                        else:
-                            print("corrupt2")
+                    #if packet is None or packet.isNAK(packet.flag):
+                    if packet is not None and packet.isNAK(packet.flag):
+                        print("GOT A NAK2")
+                        self.network.udt_send(p.get_byte_S())
+
+                    elif packet is None: #packet corrupt
+                        print("GOT A corrupt2")
                         self.network.udt_send(p.get_byte_S())
                         byte_S = None
                     elif not packet.corrupt(byte_S) and packet.isACK(packet.flag):
-                        print("ACK2")
+                        print("GOT A ACK2")
                         self.seq_num = 1 #(start w/ a 1)
-                        #self.send = 1 #go back to the other state
+                        self.send = 1 #go back to the other state
                         dont_care = False
+                else:
+                    print("ELSE 2")
+                    print(len(byte_S))
                         
 
      #RECEIVING: 2 States
@@ -268,10 +277,10 @@ class RDT:
                 return ret_S #not enough bytes to read the whole packet
             #create packet from buffer content and add to return string
             p = Packet.from_byte_S(self.byte_buffer[0:length])
-            
 
             if self.receive == 1:
                 if p is None:
+                    print("receive 1.1")
                     #send a nak
                     #print("corrupt receive")
                     packet = Packet_2_1(0)
@@ -279,11 +288,9 @@ class RDT:
                     self.byte_buffer = self.byte_buffer[length:]
                     return None
                 elif not p.corrupt(p.get_byte_S()) and p.seq_num == 1:
-                    if self.send == 1:
-                        self.send = 2
-                    else:
-                        self.send = 1
-                    print("receive 1")
+                   
+                    
+                    print("receive 1.2")
                     #do stuff from 1.0
                     ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
                     #remove the packet bytes from the buffer
@@ -292,17 +299,25 @@ class RDT:
                     packet = Packet_2_1(1)
                     
                     self.network.udt_send(packet.get_byte_S())
+                    self.receive = 2
                     #get to the next state
+##                    if self.send == 1:
+##                        self.send = 2
+##                    else:
+##                        self.send = 1
                     
                         
-                    self.receive = 2
+                    
                 
                 elif not p.corrupt(p.get_byte_S()) and p.seq_num == 0:
-                    if self.send == 1:
-                        self.send = 2
-                    else:
-                        self.send = 1
-                    print("receive 2")
+                    print("receive 1.3")
+                    #get to the next state
+##                    if self.send == 1:
+##                        self.send = 2
+##                    else:
+##                        self.send = 1
+                    
+                        
                     #send ack
                     self.byte_buffer = self.byte_buffer[length:]
                     packet = Packet_2_1(1)
@@ -314,18 +329,18 @@ class RDT:
             #same just switch seq_num stuff
             elif self.receive == 2:
                 if p is None:
-                    if self.send == 1:
-                        self.send = 2
-                    else:
-                        self.send = 1
+                    
+                    
                     #send a nak
-                    print("corrupt receive 2")
+                    print("receive 2.1")
                     packet = Packet_2_1(0)
                     self.network.udt_send(packet.get_byte_S())
                     self.byte_buffer = self.byte_buffer[length:]
                     return None
                 elif not p.corrupt(p.get_byte_S()) and p.seq_num == 0:
-                    print("receive 1.2")
+                    print("receive 2.2")
+                    
+                    
                     #do stuff from 1.0
                     ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
                     #remove the packet bytes from the buffer
@@ -334,15 +349,24 @@ class RDT:
                     packet = Packet_2_1(1)
                     
                     self.network.udt_send(packet.get_byte_S())
-                    #get to the next state
-                    
                     self.receive = 1
+                    #get to the next state
+##                    if self.send == 1:
+##                        self.send = 2
+##                    else:
+##                        self.send = 1
+                    
+ 
                 elif not p.corrupt(p.get_byte_S()) and p.seq_num == 1:
-                    if self.send == 1:
-                        self.send = 2
-                    else:
-                        self.send = 1
-                    print("receive 2.2")
+                    #get to the next state
+##                    if self.send == 1:
+##                        self.send = 2
+##                    else:
+##                        self.send = 1
+                    
+                        
+
+                    print("receive 2.3")
                     self.byte_buffer = self.byte_buffer[length:]
                     #send ack
                     packet = Packet_2_1(1)
