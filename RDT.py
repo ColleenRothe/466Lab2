@@ -2,6 +2,7 @@ import Network
 import argparse
 from time import sleep
 import hashlib
+import time
 
 
 class Packet:
@@ -56,8 +57,8 @@ class Packet_2_1:
     ## the number of bytes used to store packet length
     seq_num_S_length = 10
     length_S_length = 10
-    ACK_length = 2
-    NAK_length = 2
+    ACK_length = 1
+    NAK_length = 1
     ## length of md5 checksum in hex
     checksum_length = 32 
         
@@ -71,7 +72,7 @@ class Packet_2_1:
     # need to change return for ACK and NAK?
     def from_byte_S(self, byte_S): # added NAK and ACK
         if Packet_2_1.corrupt(byte_S):
-            RDT.rdt_2_1_send(False)
+            return None
             # raise RuntimeError('Cannot initialize Packet: byte_S is corrupt')
         #extract the fields
         seq_num = int(byte_S[Packet_2_1.length_S_length :
@@ -118,23 +119,21 @@ class Packet_2_1:
         #and check if the same
         return checksum_S != computed_checksum_S
 
-    def isACK(byte_S):
-        ACK_S = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length:
-                           Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length])
-        return ACK_S == 1
+    def isACK(self):
+        return self.ACK == 1
 
-    def isNAK(byte_S):
-        NAK_S = int(byte_S[Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length:
-                           Packet_2_1.length_S_length+Packet_2_1.seq_num_S_length+Packet_2_1.ACK_length+Packet_2_1.NAK_length])
-        return NAK_S == 1
+    def isNAK(self):
+        return self.NAK == 1
         
 
 class RDT:
     ## latest sequence number used in a packet
     seq_num = 1
+    last_num = 0
+    last_message = None
     ## buffer of bytes read from network
-    byte_buffer = '' 
-
+    byte_buffer = ''
+    
     def __init__(self, role_S, server_S, port):
         self.network = Network.NetworkLayer(role_S, server_S, port)
     
@@ -166,59 +165,169 @@ class RDT:
             self.byte_buffer = self.byte_buffer[length:]
             #if this was the last packet, will return on the next iteration
             
-    
     def rdt_2_1_send(self, msg_S):
-        #seq nums are 0,1,0,1...shouldn't have same number 2x in a row
-        # are we sending a ACK or NAK
-        ACK = 0
-        NAK = 0
-        if msg_S is True:
-            ACK = 1
-            msg_S = ""
-        elif msg_S is False:
-            NAK = 1
-            msg_S = ""
-        if self.seq_num == 1 :
-            p = Packet_2_1(0, ACK, NAK, msg_S)
-            self.seq_num = 0
-        elif self.seq_num == 0:
-            p = Packet_2_1(1, ACK, NAK, msg_S)
-            self.seq_num = 1
-        self.network.udt_send(p.get_byte_S())
+        print("s")
+        count = 0
+        while True:
+            p = Packet_2_1(self.seq_num, 0, 0, msg_S)
+            if p is None:
+                print("bad")
+                break
+            self.network.udt_send(p.get_byte_S())
+            pkt_rcv = self.network.udt_receive()
+            while pkt_rcv is None or len(pkt_rcv) < 54:
+                pkt_rcv = self.network.udt_receive()
+            length = int(pkt_rcv[0:10])
+            packet = Packet_2_1.from_byte_S(pkt_rcv[0:length])
+            if packet is not None and packet.isACK():
+                print("receive ACK")
+                #seq nums are 0,1,0,1...shouldn't have same number 2x in a row
+                if self.seq_num == 0:
+                    self.seq_num = 1
+                else:
+                    self.seq_num = 0
+                break
+            # if sent a msg send NAK and exit function
+            elif packet is not None and not packet.isNAK() and packet.msg_S != '' and self.last_message is not None and packet.msg_S in self.last_message:
+                print("0")
+                count += 1
+                pack = Packet_2_1(packet.seq_num, 1, 0, "")
+                self.network.udt_send(pack.get_byte_S())
+                if count == 10:
+                    break
+            
   
     def rdt_2_1_receive(self):
+        print("r")
         ret_S = None
         byte_S = self.network.udt_receive()
         self.byte_buffer += byte_S
+        #keep extracting packets - if reordered, could get more than one
         while True:
             #check if we have received enough bytes
             if(len(self.byte_buffer) < Packet_2_1.length_S_length):
+                sleep(0.1)
+                self.last_message = ret_S
                 return ret_S #not enough bytes to read packet length
             #extract length of packet
             length = int(self.byte_buffer[:Packet_2_1.length_S_length])
             if len(self.byte_buffer) < length:
+                sleep(0.1)
+                self.last_message = ret_S
                 return ret_S #not enough bytes to read the whole packet
             #create packet from buffer content and add to return string
             p = Packet_2_1.from_byte_S(self.byte_buffer[0:length])
-            if p.ACK == 1:
-                # what do
-                ret_S = ""
-                #return ret_S
-            elif p.NAK == 1:
-                ret_S = None
-                #return ret_S
-            else: # is message
-                self.rdt_2_1_send(True)
+            if p is None or p.isACK() or p.isNAK():
+                print("1")
+                packet = Packet_2_1(0, 0, 1, "")
+                self.network.udt_send(packet.get_byte_S())
+                #sleep(0.1)
+                return None
+            elif p.seq_num == self.last_num:
+                print("2")
+                packet = Packet_2_1(p.seq_num, 1, 0, "")
+                self.network.udt_send(packet.get_byte_S())
+            elif p.seq_num != self.last_num:
+                print("3")
+                packet = Packet_2_1(p.seq_num, 1, 0, "")
+                self.network.udt_send(packet.get_byte_S())
                 ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
-                #remove the packet bytes from the buffer
+                self.last_num = p.seq_num
+            else:
+                print("4")
+                packet = Packet_2_1(p.seq_num, 0, 1, "")
+                self.network.udt_send(packet.get_byte_S())
+            #remove the packet bytes from the buffer
             self.byte_buffer = self.byte_buffer[length:]
-                #if this was the last packet, will return on the next iteration
-    
+            #if this was the last packet, will return on the next iteration
+        
     def rdt_3_0_send(self, msg_S):
-        pass
+        print("s")
+        count = 0
+        time_of_last_data = time.time()
+        #START TIMER
+        timeout = 2 #??send next message if not response...
+
+        while True:
+            p = Packet_2_1(self.seq_num, 0, 0, msg_S)
+            self.network.udt_send(p.get_byte_S())
+            
+
+            pkt_rcv = self.network.udt_receive()
+            while pkt_rcv is None or len(pkt_rcv) < 54:
+                pkt_rcv = self.network.udt_receive()
+            length = int(pkt_rcv[0:Packet_2_1.length_S_length])
+            packet = Packet_2_1.from_byte_S(pkt_rcv[0:length])
+
+
+            #if packet is none and is ack(1) #or incorrect seq. num
+                #stay there,loop on
+            if packet is None or packet.isACK() and packet.seq_num != self.seq_num:
+                continue
+            #if timeout
+                #udt_send(packet)
+                #start timer
+                #stay there and loop on
+            if time_of_last_data + timeout > time.time():
+                self.network.udt_send(p.get_byte_S())
+                time_of_last_date = time.time()
+                
+            #if not corrupt and isack(0) #or correct seq. num
+                #stop timer
+                #continue on to next state
+            if packet is not None and packet.isACK() and p.seq_num == self.seq_num:
+                #update seq. num
+                if self.seq_num == 0:
+                    self.seq_num = 1
+                else:
+                    self.seq_num = 0
+                break
+
+
         
     def rdt_3_0_receive(self):
-        pass
+        print("r")
+        ret_S = None
+        byte_S = self.network.udt_receive()
+        self.byte_buffer += byte_S
+        #keep extracting packets - if reordered, could get more than one
+        while True:
+            #check if we have received enough bytes
+            if(len(self.byte_buffer) < Packet_2_1.length_S_length):
+                sleep(0.1)
+                self.last_message = ret_S
+                return ret_S #not enough bytes to read packet length
+            #extract length of packet
+            length = int(self.byte_buffer[:Packet_2_1.length_S_length])
+            if len(self.byte_buffer) < length:
+                sleep(0.1)
+                self.last_message = ret_S
+                return ret_S #not enough bytes to read the whole packet
+            #create packet from buffer content and add to return string
+            p = Packet_2_1.from_byte_S(self.byte_buffer[0:length])
+            if p is None or p.isACK() or p.isNAK():
+                print("1")
+                packet = Packet_2_1(0, 0, 1, "")
+                self.network.udt_send(packet.get_byte_S())
+                #sleep(0.1)
+                return None
+            elif p.seq_num == self.last_num:
+                print("2")
+                packet = Packet_2_1(p.seq_num, 1, 0, "")
+                self.network.udt_send(packet.get_byte_S())
+            elif p.seq_num != self.last_num:
+                print("3")
+                packet = Packet_2_1(p.seq_num, 1, 0, "")
+                self.network.udt_send(packet.get_byte_S())
+                ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
+                self.last_num = p.seq_num
+            else:
+                print("4")
+                packet = Packet_2_1(p.seq_num, 0, 1, "")
+                self.network.udt_send(packet.get_byte_S())
+            #remove the packet bytes from the buffer
+            self.byte_buffer = self.byte_buffer[length:]
+            #if this was the last packet, will return on the next iteration
         
 
 if __name__ == '__main__':
